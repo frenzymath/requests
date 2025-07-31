@@ -5,23 +5,16 @@ open Lean
 
 namespace Requests
 
-def default_headers : Json :=
+variable {α β : Type} [ToJson α] [FromJson β]
+
+/-- Default headers to handle json input and output -/
+def defaultHeaders : Json :=
   json% {
     "accept" : "application/json",
     "content-type" : "application/json"
   }
 
-def renderParams (params: Json) : IO String :=
-  match params with
-  | Json.obj kvs =>
-    return kvs.fold (fun acc k v => acc ++ #[s!"{k}={
-      match Json.getStr? v with
-      | Except.error _ => ""
-      | Except.ok s => s
-      }"]) #[] |>.joinSep "&"
-  | _ => throw $ IO.userError "Params must be an object"
-
-def renderHeaders (headers: Json) : IO (Array String) :=
+def formatHeaders (headers : Json) : IO (Array String) :=
   match headers with
   | Json.obj kvs =>
     return kvs.fold (fun acc k v => acc ++ #["-H", s!"{k}: {
@@ -31,10 +24,23 @@ def renderHeaders (headers: Json) : IO (Array String) :=
       }"]) #[]
   | _ => throw $ IO.userError "Headers must be an object"
 
-def get {α β γ : Type} [ToJson α] [FromJson β] [ToJson γ] (url : String) (params: α) (headers: Json := default_headers) : IO β := do
-  let headers ← renderHeaders headers
-  let params ← renderParams (toJson params)
-  let url := url ++ "?" ++ params
+
+/-- Format url for get method  -/
+def formatGetUrl (url : String) (data : α) : IO String :=
+  match toJson data with
+  | Json.obj kvs =>
+    let paramStr := kvs.fold (fun acc k v => acc ++ #[s!"{k}={
+      match Json.getStr? v with
+      | Except.error _ => ""
+      | Except.ok s => s
+      }"]) #[] |>.joinSep "&"
+    return s!"{url}?{paramStr}"
+  | _ => throw $ IO.userError "Params must be an object"
+
+/-- Main entry point for get method -/
+def get (url : String) (data : α) (headers: Json := defaultHeaders) : IO β := do
+  let headers ← formatHeaders headers
+  let url ← formatGetUrl url data
   let out ← IO.Process.output {
     cmd := "curl"
     args := #["-X", "GET", url] ++ headers
@@ -47,8 +53,9 @@ def get {α β γ : Type} [ToJson α] [FromJson β] [ToJson γ] (url : String) (
     | throw $ IO.userError s!"From Json failed. {out.stderr} {out.stdout}"
   return res
 
-def post {α β γ : Type} [ToJson α] [FromJson β] [ToJson γ] (url : String) (data : α) (headers: Json := default_headers): IO β := do
-  let headers ← renderHeaders headers
+/-- Main entry point for post method -/
+def post (url : String) (data : α) (headers: Json := defaultHeaders): IO β := do
+  let headers ← formatHeaders headers
   let data := (toJson data).pretty UInt64.size
   let out ← IO.Process.output {
     cmd := "curl"
