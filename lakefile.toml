@@ -1,6 +1,6 @@
 name = "requests"
 version = "0.1.0"
-defaultTargets = ["requests"]
+defaultTargets = ["Requests"]
 
 [[lean_lib]]
 name = "Requests"
