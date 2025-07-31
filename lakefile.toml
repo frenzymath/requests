@@ -1,0 +1,10 @@
+name = "requests"
+version = "0.1.0"
+defaultTargets = ["requests"]
+
+[[lean_lib]]
+name = "Requests"
+
+[[lean_exe]]
+name = "requests"
+root = "Main"
