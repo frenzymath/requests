@@ -17,7 +17,7 @@ def defaultHeaders : Json :=
 def formatHeaders (headers : Json) : IO (Array String) :=
   match headers with
   | Json.obj kvs =>
-    return kvs.fold (fun acc k v => acc ++ #["-H", s!"{k}: {
+    return kvs.foldl (fun acc k v => acc ++ #["-H", s!"{k}: {
       match Json.getStr? v with
       | Except.error _ => ""
       | Except.ok s => s
@@ -29,7 +29,7 @@ def formatHeaders (headers : Json) : IO (Array String) :=
 def formatGetUrl (url : String) (data : α) : IO String :=
   match toJson data with
   | Json.obj kvs =>
-    let paramStr := kvs.fold (fun acc k v => acc ++ #[s!"{k}={
+    let paramStr := kvs.foldl (fun acc k v => acc ++ #[s!"{k}={
       match Json.getStr? v with
       | Except.error _ => ""
       | Except.ok s => s
