@@ -1,5 +1,8 @@
-import Lean
+module
 
+public meta import Lean
+
+public meta section
 namespace List
 
 def joinSep (ss : List String) (sep : String) : String :=

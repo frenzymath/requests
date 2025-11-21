@@ -1,7 +1,11 @@
-import Requests.Future
-import Lean
+module
+
+public meta import Requests.Future
+public meta import Lean
 
 open Lean
+
+public meta section
 
 namespace Requests
 
