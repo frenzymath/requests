@@ -47,7 +47,7 @@ def get (url : String) (data : α) (headers: Json := defaultHeaders) : IO β := 
   let url ← formatGetUrl url data
   let out ← IO.Process.output {
     cmd := "curl"
-    args := #["-X", "GET", url] ++ headers
+    args := #["--silent", "--show-error", "-X", "GET", url] ++ headers
   }
   if out.exitCode != 0 then
      throw $ IO.userError s!"Request failed. {out.stderr} {out.stdout}"
@@ -63,7 +63,7 @@ def post (url : String) (data : α) (headers: Json := defaultHeaders): IO β := 
   let data := (toJson data).pretty UInt64.size
   let out ← IO.Process.output {
     cmd := "curl"
-    args := #["-X", "POST", url] ++ headers ++ #["-d", data]
+    args := #["--silent", "--show-error", "-X", "POST", url] ++ headers ++ #["-d", data]
   }
   if out.exitCode != 0 then
      throw $ IO.userError s!"Request failed. {out.stderr} {out.stdout} {toJson data}"
