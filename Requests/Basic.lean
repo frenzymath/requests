@@ -1,7 +1,14 @@
 module
 
-public meta import Requests.Future
-public meta import Lean
+public meta import Requests.Url
+public meta import Requests.Backend.Curl
+public meta import Lean.Data.Json
+
+/-! # Frontend
+
+Turns a call like `get url params` into a validated `Request`, hands it to the
+backend (`Curl.send`), then checks the status and decodes the JSON response.
+Nothing here depends on how the backend performs the request. -/
 
 open Lean
 
@@ -9,68 +16,35 @@ public meta section
 
 namespace Requests
 
+def acceptJson : Headers := #[("Accept", "application/json")]
+
+def sendJson : Headers := acceptJson.push ("Content-Type", "application/json")
+
 variable {α β : Type} [ToJson α] [FromJson β]
 
-/-- Default headers to handle json input and output -/
-def defaultHeaders : Json :=
-  json% {
-    "accept" : "application/json",
-    "content-type" : "application/json"
-  }
+/-- Main entry point: send a request with an optional JSON `body` and decode
+the JSON response. `params` become the query string. User `headers` replace
+defaults of the same name. Non-2xx responses fail with `.http`, raised by
+`Response.ensureOk`. -/
+def request (method : Method) (url : String) (params : Params := #[])
+    (headers : Headers := #[]) (body : Option Json := none)
+    (timeout : Nat := 30) : RequestIO β := do
+  let headers := (if body.isSome then sendJson else acceptJson).merge headers
+  validateHeaders headers
+  let res ← Curl.send {
+    method, headers, timeout
+    url := withQuery url (encodeQuery params)
+    body := body.map (·.compress.toUTF8) }
+  res.ensureOk >>= Response.json
 
-def formatHeaders (headers : Json) : IO (Array String) :=
-  match headers with
-  | Json.obj kvs =>
-    return kvs.foldl (fun acc k v => acc ++ #["-H", s!"{k}: {
-      match Json.getStr? v with
-      | Except.error _ => ""
-      | Except.ok s => s
-      }"]) #[]
-  | _ => throw $ IO.userError "Headers must be an object"
+/-- GET `url` with `params` as the query string. -/
+def get (url : String) (params : Params := #[]) (headers : Headers := #[])
+    (timeout : Nat := 30) : RequestIO β :=
+  request .get url params headers (timeout := timeout)
 
-
-/-- Format url for get method  -/
-def formatGetUrl (url : String) (data : α) : IO String :=
-  match toJson data with
-  | Json.obj kvs =>
-    let paramStr := kvs.foldl (fun acc k v => acc ++ #[s!"{k}={
-      match Json.getStr? v with
-      | Except.error _ => ""
-      | Except.ok s => s
-      }"]) #[] |>.joinSep "&"
-    return s!"{url}?{paramStr}"
-  | _ => throw $ IO.userError "Params must be an object"
-
-/-- Main entry point for get method -/
-def get (url : String) (data : α) (headers: Json := defaultHeaders) : IO β := do
-  let headers ← formatHeaders headers
-  let url ← formatGetUrl url data
-  let out ← IO.Process.output {
-    cmd := "curl"
-    args := #["--silent", "--show-error", "-X", "GET", url] ++ headers
-  }
-  if out.exitCode != 0 then
-     throw $ IO.userError s!"Request failed. {out.stderr} {out.stdout}"
-  let some json := Json.parse out.stdout |>.toOption
-    | throw $ IO.userError s!"Json Parse failed. {out.stderr} {out.stdout}"
-  let some res := (fromJson? json : Except String β) |>.toOption
-    | throw $ IO.userError s!"From Json failed. {out.stderr} {out.stdout}"
-  return res
-
-/-- Main entry point for post method -/
-def post (url : String) (data : α) (headers: Json := defaultHeaders): IO β := do
-  let headers ← formatHeaders headers
-  let data := (toJson data).pretty UInt64.size
-  let out ← IO.Process.output {
-    cmd := "curl"
-    args := #["--silent", "--show-error", "-X", "POST", url] ++ headers ++ #["-d", data]
-  }
-  if out.exitCode != 0 then
-     throw $ IO.userError s!"Request failed. {out.stderr} {out.stdout} {toJson data}"
-  let some json := Json.parse out.stdout |>.toOption
-    | throw $ IO.userError s!"Json Parse failed. {out.stderr} {out.stdout} {toJson data}"
-  let some res := (fromJson? json : Except String β) |>.toOption
-    | throw $ IO.userError s!"From Json failed. {out.stderr} {out.stdout} {toJson data}"
-  return res
+/-- POST `data` as a JSON body to `url`. -/
+def post (url : String) (data : α) (headers : Headers := #[])
+    (timeout : Nat := 30) : RequestIO β :=
+  request .post url (headers := headers) (body := toJson data) (timeout := timeout)
 
 end Requests
