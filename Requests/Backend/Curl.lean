@@ -83,7 +83,7 @@ line break in a header value back into a real one. -/
 def send (r : Request) : RequestIO Response := do
   let out ← run (config r) r.body
   if out.exitCode != 0 then
-    throw (.transport s!"curl exit {out.exitCode}: {out.stderr.trimRight}")
+    throw (.transport s!"curl exit {out.exitCode}: {out.stderr.trimAsciiEnd}")
   let n := out.stdout.size - 3
   let some status := String.fromUTF8? (out.stdout.extract n out.stdout.size) >>= String.toNat?
     | throw (.transport "curl did not report an HTTP status")

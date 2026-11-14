@@ -19,13 +19,13 @@ inject extra header lines or contain other forbidden control characters. -/
 def validateHeaders {m : Type → Type} [Monad m] [MonadExceptOf RequestError m]
     (hs : Headers) : m Unit :=
   hs.forM fun (k, v) => do
-    unless !k.isEmpty && k.all fun c =>
+    unless !k.isEmpty && k.toRawSubstring.all fun c =>
       (c.val ≥ 48 && c.val ≤ 57) ||
       (c.val ≥ 65 && c.val ≤ 90) ||
       (c.val ≥ 97 && c.val ≤ 122) ||
       "!#$%&'*+-.^_`|~".contains c do
       throw (.invalidHeader k "names must contain only HTTP token characters")
-    unless v.all fun c =>
+    unless v.toRawSubstring.all fun c =>
       c.val == 9 || (c.val ≥ 32 && c.val ≤ 126) || c.val ≥ 128 do
       throw (.invalidHeader k "value contains a forbidden control character")
 
